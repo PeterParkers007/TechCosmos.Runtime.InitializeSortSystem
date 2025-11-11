@@ -7,15 +7,7 @@ namespace TechCosmos.InitializeSortSystem.Runtime
         public static InitializationManager Instance { get; private set; }
         public static bool IsInitialized { get; private set; }
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void CreateInstance()
-        {
-            if (Instance != null) return;
-
-            var managerObject = new GameObject("InitializationManager");
-            Instance = managerObject.AddComponent<InitializationManager>();
-            DontDestroyOnLoad(managerObject);
-        }
+        
 
         void Awake()
         {

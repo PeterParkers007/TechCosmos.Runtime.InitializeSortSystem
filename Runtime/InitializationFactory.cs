@@ -12,7 +12,7 @@ namespace TechCosmos.InitializeSortSystem.Runtime
         private static List<InitializeData> _preRegisteredData = new List<InitializeData>();
         private static bool _scanned = false;
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void PreRegisterAllSystems()
         {
             if (_scanned) return;
@@ -29,7 +29,6 @@ namespace TechCosmos.InitializeSortSystem.Runtime
             _initializationTypes.Clear();
 
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-
             foreach (var assembly in assemblies)
             {
                 if (assembly.FullName.StartsWith("System.") ||
@@ -40,12 +39,23 @@ namespace TechCosmos.InitializeSortSystem.Runtime
 
                 try
                 {
-                    var initializationTypes = assembly.GetTypes()
+                    var types = assembly.GetTypes();
+                    var initializationTypes = types
                         .Where(t =>
                             t.IsClass &&
                             !t.IsAbstract &&
                             typeof(IInitialization).IsAssignableFrom(t) &&
-                            t.IsDefined(typeof(InitializeAttribute), false));
+                            t.IsDefined(typeof(InitializeAttribute), false))
+                        .ToList();
+
+                    if (initializationTypes.Count > 0)
+                    {
+                        Debug.Log($"[Initialization]   找到 {initializationTypes.Count} 个初始化类型:");
+                        foreach (var type in initializationTypes)
+                        {
+                            Debug.Log($"[Initialization]     - {type.FullName}");
+                        }
+                    }
 
                     foreach (var type in initializationTypes)
                     {
@@ -61,6 +71,8 @@ namespace TechCosmos.InitializeSortSystem.Runtime
                     Debug.LogWarning($"扫描程序集 {assembly.FullName} 时出错: {e.Message}");
                 }
             }
+
+            Debug.Log($"[Initialization] 扫描完成，共找到 {_initializationTypes.Count} 个初始化类型");
         }
 
         private static void CreatePreRegisteredData()
