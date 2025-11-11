@@ -47,6 +47,11 @@ namespace TechCosmos.InitializeSortSystem.Runtime
         }
         private void OnDestroy()
         {
+            if (Instance == this)
+            {
+                _isInitialized = false;
+                Instance = null;
+            }
             _initializationQueue.Clear();
         }
     }
