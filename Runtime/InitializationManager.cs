@@ -1,69 +1,47 @@
-using System.Collections.Generic;
-using System;
 using UnityEngine;
-using System.Linq;
+
 namespace TechCosmos.InitializeSortSystem.Runtime
 {
     public class InitializationManager : MonoBehaviour
     {
         public static InitializationManager Instance { get; private set; }
-        private static List<InitializeData> _pendingInitializations = new();
-        private static bool _executionStarted = false;
-        public static bool _isInitialized = false;
+        public static bool IsInitialized { get; private set; }
 
-        public void RegisterInitialization(IInitialiation initialiation)
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void CreateInstance()
         {
-            if (_executionStarted)
-            {
-                Debug.LogWarning("[Initialization] 初始化已开始，无法注册新方法");
-                return;
-            }
+            if (Instance != null) return;
 
-            if (_pendingInitializations.Any(x => x.InitializeAction == initialiation.initializeData.InitializeAction))
-                return;
-
-            _pendingInitializations.Add(new InitializeData(
-                initialiation.initializeData.InitializeAction,
-                initialiation.initializeData.SortLevel));
+            var managerObject = new GameObject("InitializationManager");
+            Instance = managerObject.AddComponent<InitializationManager>();
+            DontDestroyOnLoad(managerObject);
         }
 
         void Awake()
         {
-            if (Instance != null)
+            if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);
                 return;
             }
 
             Instance = this;
-
-            ExcutaInitializations();
+            ExecuteAllSystems();
         }
 
-        private void ExcutaInitializations()
+        private void ExecuteAllSystems()
         {
-            _executionStarted = true;
+            InitializationFactory.ExecutePreRegisteredSystems();
+            IsInitialized = true;
+        }
 
-            // 按优先级执行
-            foreach (var data in _pendingInitializations.OrderByDescending(x => x.SortLevel))
+        private void OnDestroy()
+        {
+            if (Instance == this)
             {
-                try
-                {
-                    data.InitializeAction?.Invoke();
-                    Debug.Log($"[Initialization] 执行成功: {data.InitializeAction.Method.Name}");
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"[Initialization] 执行失败: {ex.Message}");
-                }
+                Instance = null;
+                IsInitialized = false;
             }
-
-            _pendingInitializations.Clear();
-        }
-
-        private void OnDisable()
-        {
-            _isInitialized = false;
         }
     }
 }
