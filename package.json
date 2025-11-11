@@ -1,0 +1,22 @@
+{
+  "name": "com.tech-cosmos.initialize-sort-system",
+  "version": "1.0.0",
+  "displayName": "Initialize Sort System",
+  "description": "用于 Unity 项目的轻量级初始化依赖管理系统。通过基于优先级的排序解决模块初始化顺序问题.",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "keywords": [
+    "initialization",
+    "dependency",
+    "sorting",
+    "bootstrapping",
+    "execution-order",
+    "module",
+    "system"
+  ],
+  "author": {
+    "name": "Tech Cosmos",
+    "email": "support@tech-cosmos.com",
+    "url": "https://www.tech-cosmos.com"
+  }
+}
