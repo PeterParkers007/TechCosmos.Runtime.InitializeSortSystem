@@ -46,8 +46,8 @@ namespace TechCosmos.InitializeSortSystem.Editor
 
                 _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
                 {
-                    // 按初始化顺序排序显示
-                    foreach (var systemInfo in _systemInfos.Where(s => s != null).OrderBy(s => s.InitializationOrder))
+                    // 按建议优先级排序显示（高优先级在前）
+                    foreach (var systemInfo in _systemInfos.Where(s => s != null).OrderByDescending(s => s.SuggestedPriority))
                     {
                         DrawSystemInfo(systemInfo);
                     }
@@ -89,13 +89,8 @@ namespace TechCosmos.InitializeSortSystem.Editor
                     }
                 }
 
-                // 依赖深度和初始化顺序
-                EditorGUILayout.BeginHorizontal();
-                {
-                    EditorGUILayout.LabelField($"依赖深度: {systemInfo.DependencyDepth}", GUILayout.Width(120));
-                    EditorGUILayout.LabelField($"初始化顺序: {systemInfo.InitializationOrder}", GUILayout.Width(120));
-                }
-                EditorGUILayout.EndHorizontal();
+                // 初始化顺序
+                EditorGUILayout.LabelField($"初始化顺序: {systemInfo.InitializationOrder}");
 
                 // 依赖信息
                 if (systemInfo.Dependencies != null && systemInfo.Dependencies.Count > 0)
@@ -117,6 +112,16 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 else
                 {
                     EditorGUILayout.LabelField("被依赖的系统: 无", EditorStyles.miniLabel);
+                }
+
+                // 依赖解释
+                if (systemInfo.Dependencies != null && systemInfo.Dependencies.Count > 0)
+                {
+                    EditorGUILayout.LabelField($"说明: 依赖 {systemInfo.Dependencies.Count} 个系统，需要等它们先初始化", EditorStyles.miniLabel);
+                }
+                if (systemInfo.Dependents != null && systemInfo.Dependents.Count > 0)
+                {
+                    EditorGUILayout.LabelField($"说明: {systemInfo.Dependents.Count} 个系统依赖本系统，需要先初始化", EditorStyles.miniLabel);
                 }
             }
             EditorGUILayout.EndVertical();
@@ -184,10 +189,7 @@ namespace TechCosmos.InitializeSortSystem.Editor
             // 计算依赖关系图
             BuildDependencyGraph();
 
-            // 计算依赖深度和初始化顺序
-            CalculateDependencyDepth();
-
-            // 计算建议的优先级值
+            // 计算建议的优先级值和初始化顺序
             CalculateSuggestedPriorities();
 
             Debug.Log($"依赖分析完成！共扫描到 {_systemInfos.Count} 个系统");
@@ -208,7 +210,6 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 Dependencies = new HashSet<string>(),
                 Dependents = new HashSet<string>(),
                 CurrentPriority = 0,
-                DependencyDepth = 0,
                 InitializationOrder = 0,
                 SuggestedPriority = 0
             };
@@ -290,63 +291,15 @@ namespace TechCosmos.InitializeSortSystem.Editor
             }
         }
 
-        private void CalculateDependencyDepth()
-        {
-            // 计算每个系统的依赖深度
-            foreach (var system in _systemInfos.Where(s => s != null))
-            {
-                system.DependencyDepth = CalculateDepth(system, new HashSet<string>());
-            }
-
-            // 根据依赖深度分配初始化顺序（深度越大，越先初始化）
-            int order = 1;
-            foreach (var system in _systemInfos.Where(s => s != null).OrderByDescending(s => s.DependencyDepth))
-            {
-                system.InitializationOrder = order++;
-            }
-        }
-
-        private int CalculateDepth(SystemInfo system, HashSet<string> visited)
-        {
-            if (system == null || string.IsNullOrEmpty(system.SystemId)) return 0;
-
-            if (visited.Contains(system.SystemId))
-            {
-                Debug.LogError($"发现循环依赖！系统: {system.SystemId}");
-                return 0;
-            }
-
-            visited.Add(system.SystemId);
-
-            int maxDepth = 0;
-            if (system.Dependencies != null)
-            {
-                foreach (var dependency in system.Dependencies)
-                {
-                    if (string.IsNullOrEmpty(dependency)) continue;
-
-                    var dependentSystem = _systemInfos.FirstOrDefault(s => s != null && s.SystemId == dependency);
-                    if (dependentSystem != null)
-                    {
-                        int depth = CalculateDepth(dependentSystem, new HashSet<string>(visited)) + 1;
-                        maxDepth = Math.Max(maxDepth, depth);
-                    }
-                }
-            }
-
-            visited.Remove(system.SystemId);
-            return maxDepth;
-        }
-
         private void CalculateSuggestedPriorities()
         {
-            // 基于依赖深度和拓扑排序计算建议的优先级
-            // 基本原则：依赖深度越大（依赖链越长），优先级应该越高（越先初始化）
+            // 修正逻辑：被依赖的系统需要更高的优先级（先初始化）
+            // 基本原则：没有依赖的系统先初始化，被依赖的系统优先级更高
 
-            // 获取拓扑排序结果
+            // 获取拓扑排序结果（被依赖的系统排在前面）
             var sortedSystems = TopologicalSort();
 
-            // 分配建议优先级（从高到低）
+            // 分配建议优先级（先初始化的系统获得高优先级）
             int basePriority = 1000;
             int priorityStep = 10; // 每个系统间隔10个优先级单位
 
@@ -356,16 +309,14 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 basePriority -= priorityStep;
             }
 
-            // 确保优先级不会为负数
-            var minPriority = sortedSystems.Where(s => s != null).Min(s => s.SuggestedPriority);
-            if (minPriority < 0)
+            // 分配初始化顺序
+            int order = 1;
+            foreach (var system in sortedSystems.Where(s => s != null))
             {
-                int offset = -minPriority;
-                foreach (var system in sortedSystems.Where(s => s != null))
-                {
-                    system.SuggestedPriority += offset;
-                }
+                system.InitializationOrder = order++;
             }
+
+            Debug.Log($"优先级计算完成：最高优先级 {sortedSystems.First().SuggestedPriority}，最低优先级 {sortedSystems.Last().SuggestedPriority}");
         }
 
         private List<SystemInfo> TopologicalSort()
@@ -374,6 +325,20 @@ namespace TechCosmos.InitializeSortSystem.Editor
             var visited = new HashSet<string>();
             var tempMark = new HashSet<string>();
 
+            // 找出所有没有依赖的系统（这些应该最先初始化）
+            var noDependencySystems = _systemInfos.Where(s => s != null &&
+                (s.Dependencies == null || s.Dependencies.Count == 0)).ToList();
+
+            // 从没有依赖的系统开始遍历
+            foreach (var system in noDependencySystems)
+            {
+                if (!visited.Contains(system.SystemId))
+                {
+                    TopologicalVisit(system, visited, tempMark, result);
+                }
+            }
+
+            // 处理可能有循环依赖的剩余系统
             foreach (var system in _systemInfos.Where(s => s != null))
             {
                 if (!visited.Contains(system.SystemId))
@@ -399,15 +364,15 @@ namespace TechCosmos.InitializeSortSystem.Editor
             {
                 tempMark.Add(system.SystemId);
 
-                // 先访问所有依赖
-                if (system.Dependencies != null)
+                // 修正：先访问所有依赖这个系统的系统（被依赖的系统应该先初始化）
+                if (system.Dependents != null)
                 {
-                    foreach (var dependency in system.Dependencies)
+                    foreach (var dependentId in system.Dependents)
                     {
-                        if (string.IsNullOrEmpty(dependency)) continue;
+                        if (string.IsNullOrEmpty(dependentId)) continue;
 
-                        var dependentSystem = _systemInfos.FirstOrDefault(s => s != null && s.SystemId == dependency);
-                        if (dependentSystem != null)
+                        var dependentSystem = _systemInfos.FirstOrDefault(s => s != null && s.SystemId == dependentId);
+                        if (dependentSystem != null && !visited.Contains(dependentSystem.SystemId))
                         {
                             TopologicalVisit(dependentSystem, visited, tempMark, result);
                         }
@@ -416,7 +381,9 @@ namespace TechCosmos.InitializeSortSystem.Editor
 
                 tempMark.Remove(system.SystemId);
                 visited.Add(system.SystemId);
-                result.Insert(0, system); // 插入到开头，这样依赖项会在后面
+
+                // 修正：被依赖的系统应该排在前面（先初始化）
+                result.Insert(0, system);
             }
         }
     }
@@ -427,11 +394,10 @@ namespace TechCosmos.InitializeSortSystem.Editor
         public Type Type;
         public string SystemId;
         public int CurrentPriority;
-        public int SuggestedPriority; // 建议的优先级值
-        public int DependencyDepth;   // 依赖深度（0表示没有依赖）
+        public int SuggestedPriority; // 建议的优先级值（越高越先初始化）
         public int InitializationOrder; // 初始化顺序（1表示最先初始化）
-        public HashSet<string> Dependencies;
-        public HashSet<string> Dependents;
+        public HashSet<string> Dependencies;  // 本系统依赖的其他系统
+        public HashSet<string> Dependents;    // 依赖本系统的其他系统
     }
 }
 #endif
