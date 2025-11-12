@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+ï»¿#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,38 +15,49 @@ namespace TechCosmos.InitializeSortSystem.Editor
         private List<SystemInfo> _systemInfos = new List<SystemInfo>();
         private bool _showPrioritySuggestions = true;
 
-        [MenuItem("Tech-Cosmos/³õÊ¼»¯ÒÀÀµ·ÖÎöÆ÷")]
+        [MenuItem("Tech-Cosmos/åˆå§‹åŒ–ä¾èµ–åˆ†æå™¨")]
         public static void ShowWindow()
         {
-            GetWindow<InitializationDependencyAnalyzer>("³õÊ¼»¯ÒÀÀµ·ÖÎöÆ÷");
+            GetWindow<InitializationDependencyAnalyzer>("åˆå§‹åŒ–ä¾èµ–åˆ†æå™¨");
         }
 
         private void OnGUI()
         {
             GUILayout.Space(10);
 
-            // ¿ØÖÆÑ¡Ïî
+            // æ§åˆ¶é€‰é¡¹
             EditorGUILayout.BeginVertical("box");
             {
-                if (GUILayout.Button("É¨ÃèÒÀÀµ¹ØÏµ", GUILayout.Height(30)))
+                if (GUILayout.Button("æ‰«æä¾èµ–å…³ç³»", GUILayout.Height(30)))
                 {
                     ScanDependencies();
                 }
 
-                _showPrioritySuggestions = EditorGUILayout.Toggle("ÏÔÊ¾ÓÅÏÈÖµ½¨Òé", _showPrioritySuggestions);
+                _showPrioritySuggestions = EditorGUILayout.Toggle("æ˜¾ç¤ºä¼˜å…ˆå€¼å»ºè®®", _showPrioritySuggestions);
             }
             EditorGUILayout.EndVertical();
 
             GUILayout.Space(10);
 
-            // ½á¹ûÏÔÊ¾
+            // ç»“æœæ˜¾ç¤º
             if (_systemInfos.Count > 0)
             {
-                GUILayout.Label($"ÕÒµ½ {_systemInfos.Count} ¸öÏµÍ³:", EditorStyles.boldLabel);
+                GUILayout.Label($"æ‰¾åˆ° {_systemInfos.Count} ä¸ªç³»ç»Ÿ:", EditorStyles.boldLabel);
+
+                // ç»Ÿè®¡ä¿¡æ¯
+                var abstractBaseCount = _systemInfos.Count(s => s.UsesAbstractBase);
+                var hasFieldSupportCount = _systemInfos.Count(s => s.HasPriorityField);
+
+                EditorGUILayout.BeginHorizontal();
+                {
+                    EditorGUILayout.LabelField($"ä½¿ç”¨æŠ½è±¡åŸºç±»: {abstractBaseCount}", EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField($"æœ‰å­—æ®µæ”¯æŒ: {hasFieldSupportCount}", EditorStyles.miniLabel);
+                }
+                EditorGUILayout.EndHorizontal();
 
                 _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
                 {
-                    // °´½¨ÒéÓÅÏÈ¼¶ÅÅĞòÏÔÊ¾£¨¸ßÓÅÏÈ¼¶ÔÚÇ°£©
+                    // æŒ‰å»ºè®®ä¼˜å…ˆçº§æ’åºæ˜¾ç¤ºï¼ˆé«˜ä¼˜å…ˆçº§åœ¨å‰ï¼‰
                     foreach (var systemInfo in _systemInfos.Where(s => s != null).OrderByDescending(s => s.SuggestedPriority))
                     {
                         DrawSystemInfo(systemInfo);
@@ -62,66 +73,104 @@ namespace TechCosmos.InitializeSortSystem.Editor
 
             EditorGUILayout.BeginVertical("box");
             {
-                // ÏµÍ³Ãû³ÆºÍID
-                EditorGUILayout.LabelField(systemInfo.SystemId ?? "Î´ÖªÏµÍ³ID", EditorStyles.boldLabel);
+                // ç³»ç»Ÿåç§°å’ŒID
+                EditorGUILayout.LabelField(systemInfo.SystemId ?? "æœªçŸ¥ç³»ç»ŸID", EditorStyles.boldLabel);
 
-                // ÀàĞÍÏÔÊ¾
+                // ç±»å‹æ˜¾ç¤º
                 if (systemInfo.Type != null)
                 {
-                    EditorGUILayout.LabelField($"ÀàĞÍ: {systemInfo.Type.FullName}");
+                    string typeInfo = $"ç±»å‹: {systemInfo.Type.Name}";
+                    if (systemInfo.UsesAbstractBase)
+                    {
+                        typeInfo += " âœ“ (InitializationBehaviour)";
+                    }
+                    EditorGUILayout.LabelField(typeInfo);
                 }
 
-                // µ±Ç°ÓÅÏÈ¼¶
-                EditorGUILayout.LabelField($"µ±Ç°ÓÅÏÈ¼¶: {systemInfo.CurrentPriority}");
+                // å­—æ®µæ”¯æŒçŠ¶æ€
+                EditorGUILayout.BeginHorizontal();
+                {
+                    if (systemInfo.UsesAbstractBase)
+                    {
+                        EditorGUILayout.LabelField("æ¶æ„: æŠ½è±¡åŸºç±»", GetMiniLabelStyle(Color.green));
+                    }
+                    else if (systemInfo.HasPriorityField)
+                    {
+                        EditorGUILayout.LabelField("æ¶æ„: è‡ªå®šä¹‰å­—æ®µ", GetMiniLabelStyle(Color.blue));
+                    }
+                    else
+                    {
+                        EditorGUILayout.LabelField("æ¶æ„: ä»…æ¥å£", GetMiniLabelStyle(Color.red));
+                    }
 
-                // ½¨ÒéÓÅÏÈ¼¶£¨Èç¹ûÆôÓÃ£©
+                    if (systemInfo.HasPriorityField)
+                    {
+                        EditorGUILayout.LabelField("å­—æ®µ: æ”¯æŒ", GetMiniLabelStyle(Color.green));
+                    }
+                    else
+                    {
+                        EditorGUILayout.LabelField("å­—æ®µ: ä¸æ”¯æŒ", GetMiniLabelStyle(Color.yellow));
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
+
+                // å½“å‰ä¼˜å…ˆçº§
+                EditorGUILayout.LabelField($"å½“å‰ä¼˜å…ˆçº§: {systemInfo.CurrentPriority}");
+
+                // å»ºè®®ä¼˜å…ˆçº§ï¼ˆå¦‚æœå¯ç”¨ï¼‰
                 if (_showPrioritySuggestions)
                 {
                     var style = new GUIStyle(EditorStyles.label);
                     if (systemInfo.SuggestedPriority != systemInfo.CurrentPriority)
                     {
                         style.normal.textColor = Color.yellow;
-                        EditorGUILayout.LabelField($"½¨ÒéÓÅÏÈ¼¶: {systemInfo.SuggestedPriority}", style);
+                        EditorGUILayout.LabelField($"å»ºè®®ä¼˜å…ˆçº§: {systemInfo.SuggestedPriority}", style);
+
+                        // å¦‚æœæ”¯æŒå­—æ®µï¼Œæ˜¾ç¤ºä¿®æ”¹å»ºè®®
+                        if (systemInfo.HasPriorityField)
+                        {
+                            EditorGUILayout.LabelField($"æç¤º: è®¾ç½® _priority = {systemInfo.SuggestedPriority}", EditorStyles.miniLabel);
+                        }
+                        else
+                        {
+                            EditorGUILayout.LabelField("æç¤º: å»ºè®®ç»§æ‰¿ InitializationBehaviour ä»¥è·å¾—å­—æ®µæ”¯æŒ", EditorStyles.miniLabel);
+                        }
                     }
                     else
                     {
-                        EditorGUILayout.LabelField($"½¨ÒéÓÅÏÈ¼¶: {systemInfo.SuggestedPriority} (ÎŞĞèĞŞ¸Ä)");
+                        EditorGUILayout.LabelField($"å»ºè®®ä¼˜å…ˆçº§: {systemInfo.SuggestedPriority} (æ— éœ€ä¿®æ”¹)");
                     }
                 }
 
-                // ³õÊ¼»¯Ë³Ğò
-                EditorGUILayout.LabelField($"³õÊ¼»¯Ë³Ğò: {systemInfo.InitializationOrder}");
+                // åˆå§‹åŒ–é¡ºåº
+                EditorGUILayout.LabelField($"åˆå§‹åŒ–é¡ºåº: {systemInfo.InitializationOrder}");
 
-                // ÒÀÀµĞÅÏ¢
+                // ä¾èµ–ä¿¡æ¯
                 if (systemInfo.Dependencies != null && systemInfo.Dependencies.Count > 0)
                 {
-                    EditorGUILayout.LabelField($"ÒÀÀµµÄÏµÍ³ ({systemInfo.Dependencies.Count}¸ö):", EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField($"ä¾èµ–çš„ç³»ç»Ÿ ({systemInfo.Dependencies.Count}ä¸ª):", EditorStyles.miniLabel);
                     EditorGUILayout.LabelField(string.Join(", ", systemInfo.Dependencies), EditorStyles.wordWrappedMiniLabel);
                 }
                 else
                 {
-                    EditorGUILayout.LabelField("ÒÀÀµµÄÏµÍ³: ÎŞ", EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField("ä¾èµ–çš„ç³»ç»Ÿ: æ— ", EditorStyles.miniLabel);
                 }
 
-                // ±»ÒÀÀµĞÅÏ¢
+                // è¢«ä¾èµ–ä¿¡æ¯
                 if (systemInfo.Dependents != null && systemInfo.Dependents.Count > 0)
                 {
-                    EditorGUILayout.LabelField($"±»ÒÀÀµµÄÏµÍ³ ({systemInfo.Dependents.Count}¸ö):", EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField($"è¢«ä¾èµ–çš„ç³»ç»Ÿ ({systemInfo.Dependents.Count}ä¸ª):", EditorStyles.miniLabel);
                     EditorGUILayout.LabelField(string.Join(", ", systemInfo.Dependents), EditorStyles.wordWrappedMiniLabel);
                 }
                 else
                 {
-                    EditorGUILayout.LabelField("±»ÒÀÀµµÄÏµÍ³: ÎŞ", EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField("è¢«ä¾èµ–çš„ç³»ç»Ÿ: æ— ", EditorStyles.miniLabel);
                 }
 
-                // ÒÀÀµ½âÊÍ
-                if (systemInfo.Dependencies != null && systemInfo.Dependencies.Count > 0)
+                // æ¶æ„å»ºè®®
+                if (!systemInfo.UsesAbstractBase && !systemInfo.HasPriorityField)
                 {
-                    EditorGUILayout.LabelField($"ËµÃ÷: ÒÀÀµ {systemInfo.Dependencies.Count} ¸öÏµÍ³£¬ĞèÒªµÈËüÃÇÏÈ³õÊ¼»¯", EditorStyles.miniLabel);
-                }
-                if (systemInfo.Dependents != null && systemInfo.Dependents.Count > 0)
-                {
-                    EditorGUILayout.LabelField($"ËµÃ÷: {systemInfo.Dependents.Count} ¸öÏµÍ³ÒÀÀµ±¾ÏµÍ³£¬ĞèÒªÏÈ³õÊ¼»¯", EditorStyles.miniLabel);
+                    EditorGUILayout.HelpBox("å»ºè®®ç»§æ‰¿ InitializationBehaviour ä»¥è·å¾—æ›´å¥½çš„å­—æ®µæ”¯æŒ", MessageType.Info);
                 }
             }
             EditorGUILayout.EndVertical();
@@ -129,11 +178,18 @@ namespace TechCosmos.InitializeSortSystem.Editor
             GUILayout.Space(5);
         }
 
+        private GUIStyle GetMiniLabelStyle(Color color)
+        {
+            var style = new GUIStyle(EditorStyles.miniLabel);
+            style.normal.textColor = color;
+            return style;
+        }
+
         private void ScanDependencies()
         {
             _systemInfos.Clear();
 
-            // É¨ÃèËùÓĞ³ÌĞò¼¯
+            // æ‰«ææ‰€æœ‰ç¨‹åºé›†
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
             var systemTypes = new Dictionary<string, Type>();
 
@@ -165,15 +221,15 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 }
                 catch (ReflectionTypeLoadException e)
                 {
-                    Debug.LogWarning($"É¨Ãè³ÌĞò¼¯ {assembly.FullName} Ê±ÀàĞÍ¼ÓÔØÊ§°Ü: {e.Message}");
+                    Debug.LogWarning($"æ‰«æç¨‹åºé›† {assembly.FullName} æ—¶ç±»å‹åŠ è½½å¤±è´¥: {e.Message}");
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning($"É¨Ãè³ÌĞò¼¯ {assembly.FullName} Ê±³ö´í: {e.Message}");
+                    Debug.LogWarning($"æ‰«æç¨‹åºé›† {assembly.FullName} æ—¶å‡ºé”™: {e.Message}");
                 }
             }
 
-            // ¹¹½¨ÏµÍ³ĞÅÏ¢
+            // æ„å»ºç³»ç»Ÿä¿¡æ¯
             foreach (var kvp in systemTypes)
             {
                 if (kvp.Value != null && !string.IsNullOrEmpty(kvp.Key))
@@ -186,20 +242,20 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 }
             }
 
-            // ¼ÆËãÒÀÀµ¹ØÏµÍ¼
+            // è®¡ç®—ä¾èµ–å…³ç³»å›¾
             BuildDependencyGraph();
 
-            // ¼ÆËã½¨ÒéµÄÓÅÏÈ¼¶ÖµºÍ³õÊ¼»¯Ë³Ğò
+            // è®¡ç®—å»ºè®®çš„ä¼˜å…ˆçº§å€¼å’Œåˆå§‹åŒ–é¡ºåº
             CalculateSuggestedPriorities();
 
-            Debug.Log($"ÒÀÀµ·ÖÎöÍê³É£¡¹²É¨Ãèµ½ {_systemInfos.Count} ¸öÏµÍ³");
+            Debug.Log($"ä¾èµ–åˆ†æå®Œæˆï¼å…±æ‰«æåˆ° {_systemInfos.Count} ä¸ªç³»ç»Ÿ");
         }
 
         private SystemInfo CreateSystemInfo(Type type, string systemId)
         {
             if (type == null || string.IsNullOrEmpty(systemId))
             {
-                Debug.LogError($"´´½¨SystemInfoÊ§°Ü£ºÀàĞÍÎªnull»òÏµÍ³IDÎª¿Õ");
+                Debug.LogError($"åˆ›å»ºSystemInfoå¤±è´¥ï¼šç±»å‹ä¸ºnullæˆ–ç³»ç»ŸIDä¸ºç©º");
                 return null;
             }
 
@@ -211,18 +267,20 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 Dependents = new HashSet<string>(),
                 CurrentPriority = 0,
                 InitializationOrder = 0,
-                SuggestedPriority = 0
+                SuggestedPriority = 0,
+                UsesAbstractBase = false,
+                HasPriorityField = false
             };
 
             try
             {
-                // »ñÈ¡µ±Ç°ÓÅÏÈ¼¶ - ¼ò»¯°æ±¾£¬²»´´½¨ÊµÀı
-                if (typeof(IInitialization).IsAssignableFrom(type))
-                {
-                    systemInfo.CurrentPriority = GetPriorityWithoutInstantiation(type);
-                }
+                // æ£€æŸ¥æ¶æ„ç±»å‹å’Œå­—æ®µæ”¯æŒ
+                CheckArchitectureSupport(systemInfo, type);
 
-                // ½âÎöÒÀÀµ¹ØÏµ
+                // è·å–å½“å‰ä¼˜å…ˆçº§
+                systemInfo.CurrentPriority = GetCurrentPriority(systemInfo, type);
+
+                // è§£æä¾èµ–å…³ç³»
                 var dependsOnAttributes = type.GetCustomAttributes<DependsOnAttribute>(false);
                 foreach (var attr in dependsOnAttributes)
                 {
@@ -237,30 +295,85 @@ namespace TechCosmos.InitializeSortSystem.Editor
             }
             catch (Exception e)
             {
-                Debug.LogError($"´´½¨ {type.FullName} µÄSystemInfoÊ±³ö´í: {e.Message}");
+                Debug.LogError($"åˆ›å»º {type.FullName} çš„SystemInfoæ—¶å‡ºé”™: {e.Message}");
                 return null;
             }
 
             return systemInfo;
         }
 
-        private int GetPriorityWithoutInstantiation(Type type)
+        private void CheckArchitectureSupport(SystemInfo systemInfo, Type type)
         {
-            // ³¢ÊÔÍ¨¹ı·´Éä×Ö¶Î»ñÈ¡ÓÅÏÈ¼¶£¬±ÜÃâÊµÀı»¯
-            var priorityField = type.GetField("_priority", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (priorityField != null && priorityField.FieldType == typeof(int))
-            {
-                return 0; // ·µ»ØÄ¬ÈÏÖµ
-            }
+            // æ£€æŸ¥æ˜¯å¦ç»§æ‰¿è‡ªæŠ½è±¡åŸºç±»
+            systemInfo.UsesAbstractBase = typeof(InitializationBehaviour).IsAssignableFrom(type);
 
-            // ¼ì²éÆäËû¿ÉÄÜµÄ×Ö¶ÎÃû
-            var possibleFieldNames = new[] { "priority", "m_priority", "initPriority", "_initPriority" };
-            foreach (var fieldName in possibleFieldNames)
+            // æ£€æŸ¥æ˜¯å¦æœ‰ä¼˜å…ˆçº§å­—æ®µæ”¯æŒ
+            if (systemInfo.UsesAbstractBase)
+            {
+                // ç»§æ‰¿è‡ªæŠ½è±¡åŸºç±»ï¼Œè‚¯å®šæœ‰å­—æ®µæ”¯æŒ
+                systemInfo.HasPriorityField = true;
+            }
+            else
+            {
+                // æ£€æŸ¥è‡ªå®šä¹‰å­—æ®µ
+                systemInfo.HasPriorityField = CheckForPriorityField(type);
+            }
+        }
+
+        private bool CheckForPriorityField(Type type)
+        {
+            // æ£€æŸ¥æ˜¯å¦æœ‰_priorityå­—æ®µæˆ–å…¶ä»–å¸¸è§å­—æ®µå
+            var fieldNames = new[] { "_priority", "priority", "m_priority", "initPriority", "_initPriority" };
+            foreach (var fieldName in fieldNames)
             {
                 var field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                 if (field != null && field.FieldType == typeof(int))
                 {
-                    return 0; // ·µ»ØÄ¬ÈÏÖµ
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private int GetCurrentPriority(SystemInfo systemInfo, Type type)
+        {
+            if (!typeof(IInitialization).IsAssignableFrom(type))
+            {
+                return 0;
+            }
+
+            // å¯¹äºæœ‰å­—æ®µæ”¯æŒçš„ç±»ï¼Œæˆ‘ä»¬å¯ä»¥å°è¯•è·å–å­—æ®µçš„é»˜è®¤å€¼
+            if (systemInfo.HasPriorityField)
+            {
+                return GetPriorityFromField(type);
+            }
+
+            // å¯¹äºæ²¡æœ‰å­—æ®µæ”¯æŒçš„ç±»ï¼Œè¿”å›é»˜è®¤å€¼
+            return 0;
+        }
+
+        private int GetPriorityFromField(Type type)
+        {
+            // å°è¯•è·å–_priorityå­—æ®µçš„é»˜è®¤å€¼
+            var priorityField = type.GetField("_priority", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (priorityField != null)
+            {
+                // å¯¹äºMonoBehaviourï¼Œæˆ‘ä»¬å¯ä»¥åˆ›å»ºä¸€ä¸ªä¸´æ—¶å®ä¾‹æ¥è·å–é»˜è®¤å€¼
+                if (typeof(MonoBehaviour).IsAssignableFrom(type))
+                {
+                    try
+                    {
+                        var tempGameObject = new GameObject("TempPriorityCheck");
+                        var component = tempGameObject.AddComponent(type);
+                        var value = (int)priorityField.GetValue(component);
+                        UnityEngine.Object.DestroyImmediate(tempGameObject);
+                        return value;
+                    }
+                    catch
+                    {
+                        // å¦‚æœåˆ›å»ºå®ä¾‹å¤±è´¥ï¼Œè¿”å›é»˜è®¤å€¼0
+                        return 0;
+                    }
                 }
             }
 
@@ -269,7 +382,7 @@ namespace TechCosmos.InitializeSortSystem.Editor
 
         private void BuildDependencyGraph()
         {
-            // ¹¹½¨ÒÀÀµÍ¼
+            // æ„å»ºä¾èµ–å›¾
             foreach (var system in _systemInfos.Where(s => s != null))
             {
                 if (system.Dependencies == null) continue;
@@ -285,7 +398,7 @@ namespace TechCosmos.InitializeSortSystem.Editor
                     }
                     else
                     {
-                        Debug.LogWarning($"ÏµÍ³ {system.SystemId} ÒÀÀµµÄ {dependency} ²»´æÔÚ");
+                        Debug.LogWarning($"ç³»ç»Ÿ {system.SystemId} ä¾èµ–çš„ {dependency} ä¸å­˜åœ¨");
                     }
                 }
             }
@@ -293,15 +406,12 @@ namespace TechCosmos.InitializeSortSystem.Editor
 
         private void CalculateSuggestedPriorities()
         {
-            // ĞŞÕıÂß¼­£º±»ÒÀÀµµÄÏµÍ³ĞèÒª¸ü¸ßµÄÓÅÏÈ¼¶£¨ÏÈ³õÊ¼»¯£©
-            // »ù±¾Ô­Ôò£ºÃ»ÓĞÒÀÀµµÄÏµÍ³ÏÈ³õÊ¼»¯£¬±»ÒÀÀµµÄÏµÍ³ÓÅÏÈ¼¶¸ü¸ß
-
-            // »ñÈ¡ÍØÆËÅÅĞò½á¹û£¨±»ÒÀÀµµÄÏµÍ³ÅÅÔÚÇ°Ãæ£©
+            // è¢«ä¾èµ–çš„ç³»ç»Ÿéœ€è¦æ›´é«˜çš„ä¼˜å…ˆçº§ï¼ˆå…ˆåˆå§‹åŒ–ï¼‰
             var sortedSystems = TopologicalSort();
 
-            // ·ÖÅä½¨ÒéÓÅÏÈ¼¶£¨ÏÈ³õÊ¼»¯µÄÏµÍ³»ñµÃ¸ßÓÅÏÈ¼¶£©
+            // åˆ†é…å»ºè®®ä¼˜å…ˆçº§ï¼ˆå…ˆåˆå§‹åŒ–çš„ç³»ç»Ÿè·å¾—é«˜ä¼˜å…ˆçº§ï¼‰
             int basePriority = 1000;
-            int priorityStep = 10; // Ã¿¸öÏµÍ³¼ä¸ô10¸öÓÅÏÈ¼¶µ¥Î»
+            int priorityStep = 10;
 
             foreach (var system in sortedSystems.Where(s => s != null))
             {
@@ -309,14 +419,14 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 basePriority -= priorityStep;
             }
 
-            // ·ÖÅä³õÊ¼»¯Ë³Ğò
+            // åˆ†é…åˆå§‹åŒ–é¡ºåº
             int order = 1;
             foreach (var system in sortedSystems.Where(s => s != null))
             {
                 system.InitializationOrder = order++;
             }
 
-            Debug.Log($"ÓÅÏÈ¼¶¼ÆËãÍê³É£º×î¸ßÓÅÏÈ¼¶ {sortedSystems.First().SuggestedPriority}£¬×îµÍÓÅÏÈ¼¶ {sortedSystems.Last().SuggestedPriority}");
+            Debug.Log($"ä¼˜å…ˆçº§è®¡ç®—å®Œæˆï¼šæœ€é«˜ä¼˜å…ˆçº§ {sortedSystems.First().SuggestedPriority}ï¼Œæœ€ä½ä¼˜å…ˆçº§ {sortedSystems.Last().SuggestedPriority}");
         }
 
         private List<SystemInfo> TopologicalSort()
@@ -325,11 +435,11 @@ namespace TechCosmos.InitializeSortSystem.Editor
             var visited = new HashSet<string>();
             var tempMark = new HashSet<string>();
 
-            // ÕÒ³öËùÓĞÃ»ÓĞÒÀÀµµÄÏµÍ³£¨ÕâĞ©Ó¦¸Ã×îÏÈ³õÊ¼»¯£©
+            // æ‰¾å‡ºæ‰€æœ‰æ²¡æœ‰ä¾èµ–çš„ç³»ç»Ÿï¼ˆè¿™äº›åº”è¯¥æœ€å…ˆåˆå§‹åŒ–ï¼‰
             var noDependencySystems = _systemInfos.Where(s => s != null &&
                 (s.Dependencies == null || s.Dependencies.Count == 0)).ToList();
 
-            // ´ÓÃ»ÓĞÒÀÀµµÄÏµÍ³¿ªÊ¼±éÀú
+            // ä»æ²¡æœ‰ä¾èµ–çš„ç³»ç»Ÿå¼€å§‹éå†
             foreach (var system in noDependencySystems)
             {
                 if (!visited.Contains(system.SystemId))
@@ -338,7 +448,7 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 }
             }
 
-            // ´¦Àí¿ÉÄÜÓĞÑ­»·ÒÀÀµµÄÊ£ÓàÏµÍ³
+            // å¤„ç†å¯èƒ½æœ‰å¾ªç¯ä¾èµ–çš„å‰©ä½™ç³»ç»Ÿ
             foreach (var system in _systemInfos.Where(s => s != null))
             {
                 if (!visited.Contains(system.SystemId))
@@ -356,7 +466,7 @@ namespace TechCosmos.InitializeSortSystem.Editor
 
             if (tempMark.Contains(system.SystemId))
             {
-                Debug.LogError($"·¢ÏÖÑ­»·ÒÀÀµ£¡ÏµÍ³: {system.SystemId}");
+                Debug.LogError($"å‘ç°å¾ªç¯ä¾èµ–ï¼ç³»ç»Ÿ: {system.SystemId}");
                 return;
             }
 
@@ -364,7 +474,7 @@ namespace TechCosmos.InitializeSortSystem.Editor
             {
                 tempMark.Add(system.SystemId);
 
-                // ĞŞÕı£ºÏÈ·ÃÎÊËùÓĞÒÀÀµÕâ¸öÏµÍ³µÄÏµÍ³£¨±»ÒÀÀµµÄÏµÍ³Ó¦¸ÃÏÈ³õÊ¼»¯£©
+                // å…ˆè®¿é—®æ‰€æœ‰ä¾èµ–è¿™ä¸ªç³»ç»Ÿçš„ç³»ç»Ÿï¼ˆè¢«ä¾èµ–çš„ç³»ç»Ÿåº”è¯¥å…ˆåˆå§‹åŒ–ï¼‰
                 if (system.Dependents != null)
                 {
                     foreach (var dependentId in system.Dependents)
@@ -382,7 +492,7 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 tempMark.Remove(system.SystemId);
                 visited.Add(system.SystemId);
 
-                // ĞŞÕı£º±»ÒÀÀµµÄÏµÍ³Ó¦¸ÃÅÅÔÚÇ°Ãæ£¨ÏÈ³õÊ¼»¯£©
+                // è¢«ä¾èµ–çš„ç³»ç»Ÿåº”è¯¥æ’åœ¨å‰é¢ï¼ˆå…ˆåˆå§‹åŒ–ï¼‰
                 result.Insert(0, system);
             }
         }
@@ -394,10 +504,14 @@ namespace TechCosmos.InitializeSortSystem.Editor
         public Type Type;
         public string SystemId;
         public int CurrentPriority;
-        public int SuggestedPriority; // ½¨ÒéµÄÓÅÏÈ¼¶Öµ£¨Ô½¸ßÔ½ÏÈ³õÊ¼»¯£©
-        public int InitializationOrder; // ³õÊ¼»¯Ë³Ğò£¨1±íÊ¾×îÏÈ³õÊ¼»¯£©
-        public HashSet<string> Dependencies;  // ±¾ÏµÍ³ÒÀÀµµÄÆäËûÏµÍ³
-        public HashSet<string> Dependents;    // ÒÀÀµ±¾ÏµÍ³µÄÆäËûÏµÍ³
+        public int SuggestedPriority;
+        public int InitializationOrder;
+        public HashSet<string> Dependencies;
+        public HashSet<string> Dependents;
+
+        // æ–°å¢å­—æ®µï¼šæ¶æ„æ”¯æŒä¿¡æ¯
+        public bool UsesAbstractBase;  // æ˜¯å¦ä½¿ç”¨æŠ½è±¡åŸºç±»
+        public bool HasPriorityField;  // æ˜¯å¦æœ‰å­—æ®µæ”¯æŒ
     }
 }
 #endif
