@@ -15,7 +15,7 @@ namespace TechCosmos.InitializeSortSystem.Editor
         private List<SystemInfo> _systemInfos = new List<SystemInfo>();
         private bool _autoApplyPriorities = true;
 
-        [MenuItem("Tools/TechCosmos/初始化依赖分析器")]
+        [MenuItem("Tech-Cosmos/初始化依赖分析器")]
         public static void ShowWindow()
         {
             GetWindow<InitializationDependencyAnalyzer>("初始化依赖分析器");
