@@ -13,9 +13,9 @@ namespace TechCosmos.InitializeSortSystem.Editor
     {
         private Vector2 _scrollPosition;
         private List<SystemInfo> _systemInfos = new List<SystemInfo>();
-        private bool _autoApplyPriorities = true;
+        private bool _showPrioritySuggestions = true;
 
-        [MenuItem("Tech-Cosmos/初始化依赖分析器")]
+        [MenuItem("Tools/TechCosmos/初始化依赖分析器")]
         public static void ShowWindow()
         {
             GetWindow<InitializationDependencyAnalyzer>("初始化依赖分析器");
@@ -28,19 +28,12 @@ namespace TechCosmos.InitializeSortSystem.Editor
             // 控制选项
             EditorGUILayout.BeginVertical("box");
             {
-                _autoApplyPriorities = EditorGUILayout.Toggle("自动应用优先级", _autoApplyPriorities);
-
-                GUILayout.Space(5);
-
                 if (GUILayout.Button("扫描依赖关系", GUILayout.Height(30)))
                 {
                     ScanDependencies();
                 }
 
-                if (GUILayout.Button("应用计算后的优先级", GUILayout.Height(30)))
-                {
-                    ApplyCalculatedPriorities();
-                }
+                _showPrioritySuggestions = EditorGUILayout.Toggle("显示优先值建议", _showPrioritySuggestions);
             }
             EditorGUILayout.EndVertical();
 
@@ -53,13 +46,10 @@ namespace TechCosmos.InitializeSortSystem.Editor
 
                 _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
                 {
-                    foreach (var systemInfo in _systemInfos.OrderBy(s => s.CalculatedPriority))
+                    // 按初始化顺序排序显示
+                    foreach (var systemInfo in _systemInfos.Where(s => s != null).OrderBy(s => s.InitializationOrder))
                     {
-                        if (systemInfo != null)
-                        {
-                            DrawSystemInfo(systemInfo);
-                        }
-                        
+                        DrawSystemInfo(systemInfo);
                     }
                 }
                 EditorGUILayout.EndScrollView();
@@ -68,44 +58,65 @@ namespace TechCosmos.InitializeSortSystem.Editor
 
         private void DrawSystemInfo(SystemInfo systemInfo)
         {
+            if (systemInfo == null) return;
+
             EditorGUILayout.BeginVertical("box");
             {
                 // 系统名称和ID
-                EditorGUILayout.LabelField(systemInfo.SystemId, EditorStyles.boldLabel);
-                EditorGUILayout.LabelField($"类型: {systemInfo.Type.Name}");
+                EditorGUILayout.LabelField(systemInfo.SystemId ?? "未知系统ID", EditorStyles.boldLabel);
 
-                // 优先级信息
+                // 类型显示
+                if (systemInfo.Type != null)
+                {
+                    EditorGUILayout.LabelField($"类型: {systemInfo.Type.FullName}");
+                }
+
+                // 当前优先级
+                EditorGUILayout.LabelField($"当前优先级: {systemInfo.CurrentPriority}");
+
+                // 建议优先级（如果启用）
+                if (_showPrioritySuggestions)
+                {
+                    var style = new GUIStyle(EditorStyles.label);
+                    if (systemInfo.SuggestedPriority != systemInfo.CurrentPriority)
+                    {
+                        style.normal.textColor = Color.yellow;
+                        EditorGUILayout.LabelField($"建议优先级: {systemInfo.SuggestedPriority}", style);
+                    }
+                    else
+                    {
+                        EditorGUILayout.LabelField($"建议优先级: {systemInfo.SuggestedPriority} (无需修改)");
+                    }
+                }
+
+                // 依赖深度和初始化顺序
                 EditorGUILayout.BeginHorizontal();
                 {
-                    EditorGUILayout.LabelField($"当前优先级: {systemInfo.CurrentPriority}");
-                    EditorGUILayout.LabelField($"计算优先级: {systemInfo.CalculatedPriority}",
-                        systemInfo.NeedsUpdate ? EditorStyles.whiteLabel : EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField($"依赖深度: {systemInfo.DependencyDepth}", GUILayout.Width(120));
+                    EditorGUILayout.LabelField($"初始化顺序: {systemInfo.InitializationOrder}", GUILayout.Width(120));
                 }
                 EditorGUILayout.EndHorizontal();
 
                 // 依赖信息
-                if (systemInfo.Dependencies.Count > 0)
+                if (systemInfo.Dependencies != null && systemInfo.Dependencies.Count > 0)
                 {
-                    EditorGUILayout.LabelField($"依赖: {string.Join(", ", systemInfo.Dependencies)}");
+                    EditorGUILayout.LabelField($"依赖的系统 ({systemInfo.Dependencies.Count}个):", EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField(string.Join(", ", systemInfo.Dependencies), EditorStyles.wordWrappedMiniLabel);
+                }
+                else
+                {
+                    EditorGUILayout.LabelField("依赖的系统: 无", EditorStyles.miniLabel);
                 }
 
-                if (systemInfo.Dependents.Count > 0)
+                // 被依赖信息
+                if (systemInfo.Dependents != null && systemInfo.Dependents.Count > 0)
                 {
-                    EditorGUILayout.LabelField($"被依赖: {string.Join(", ", systemInfo.Dependents)}", EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField($"被依赖的系统 ({systemInfo.Dependents.Count}个):", EditorStyles.miniLabel);
+                    EditorGUILayout.LabelField(string.Join(", ", systemInfo.Dependents), EditorStyles.wordWrappedMiniLabel);
                 }
-
-                // 操作按钮
-                if (systemInfo.NeedsUpdate)
+                else
                 {
-                    EditorGUILayout.BeginHorizontal();
-                    {
-                        GUILayout.FlexibleSpace();
-                        if (GUILayout.Button("更新优先级", GUILayout.Width(100)))
-                        {
-                            UpdateSystemPriority(systemInfo);
-                        }
-                    }
-                    EditorGUILayout.EndHorizontal();
+                    EditorGUILayout.LabelField("被依赖的系统: 无", EditorStyles.miniLabel);
                 }
             }
             EditorGUILayout.EndVertical();
@@ -131,18 +142,25 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 try
                 {
                     var types = assembly.GetTypes()
-                        .Where(t => t.IsClass &&
+                        .Where(t => t != null &&
+                                   t.IsClass &&
                                    !t.IsAbstract &&
                                    t.IsDefined(typeof(InitializeAttribute), false));
 
                     foreach (var type in types)
                     {
                         var attribute = type.GetCustomAttribute<InitializeAttribute>();
-                        if (attribute != null && !systemTypes.ContainsKey(attribute.InitializationId))
+                        if (attribute != null &&
+                            !string.IsNullOrEmpty(attribute.InitializationId) &&
+                            !systemTypes.ContainsKey(attribute.InitializationId))
                         {
                             systemTypes[attribute.InitializationId] = type;
                         }
                     }
+                }
+                catch (ReflectionTypeLoadException e)
+                {
+                    Debug.LogWarning($"扫描程序集 {assembly.FullName} 时类型加载失败: {e.Message}");
                 }
                 catch (Exception e)
                 {
@@ -153,79 +171,200 @@ namespace TechCosmos.InitializeSortSystem.Editor
             // 构建系统信息
             foreach (var kvp in systemTypes)
             {
-                var systemInfo = CreateSystemInfo(kvp.Value, kvp.Key);
-                _systemInfos.Add(systemInfo);
+                if (kvp.Value != null && !string.IsNullOrEmpty(kvp.Key))
+                {
+                    var systemInfo = CreateSystemInfo(kvp.Value, kvp.Key);
+                    if (systemInfo != null)
+                    {
+                        _systemInfos.Add(systemInfo);
+                    }
+                }
             }
 
             // 计算依赖关系图
             BuildDependencyGraph();
 
-            // 拓扑排序计算优先级
-            CalculatePriorities();
+            // 计算依赖深度和初始化顺序
+            CalculateDependencyDepth();
+
+            // 计算建议的优先级值
+            CalculateSuggestedPriorities();
 
             Debug.Log($"依赖分析完成！共扫描到 {_systemInfos.Count} 个系统");
-
-            // 自动应用优先级
-            if (_autoApplyPriorities)
-            {
-                ApplyCalculatedPriorities();
-            }
         }
 
         private SystemInfo CreateSystemInfo(Type type, string systemId)
         {
+            if (type == null || string.IsNullOrEmpty(systemId))
+            {
+                Debug.LogError($"创建SystemInfo失败：类型为null或系统ID为空");
+                return null;
+            }
+
             var systemInfo = new SystemInfo
             {
                 Type = type,
                 SystemId = systemId,
                 Dependencies = new HashSet<string>(),
-                Dependents = new HashSet<string>()
+                Dependents = new HashSet<string>(),
+                CurrentPriority = 0,
+                DependencyDepth = 0,
+                InitializationOrder = 0,
+                SuggestedPriority = 0
             };
 
-            // 获取当前优先级
-            var instance = Activator.CreateInstance(type) as IInitialization;
-            systemInfo.CurrentPriority = instance?.Priority ?? 0;
-
-            // 解析依赖关系
-            var dependsOnAttributes = type.GetCustomAttributes<DependsOnAttribute>();
-            foreach (var attr in dependsOnAttributes)
+            try
             {
-                foreach (var dependency in attr.SystemIds)
+                // 获取当前优先级 - 简化版本，不创建实例
+                if (typeof(IInitialization).IsAssignableFrom(type))
                 {
-                    systemInfo.Dependencies.Add(dependency);
+                    systemInfo.CurrentPriority = GetPriorityWithoutInstantiation(type);
                 }
+
+                // 解析依赖关系
+                var dependsOnAttributes = type.GetCustomAttributes<DependsOnAttribute>(false);
+                foreach (var attr in dependsOnAttributes)
+                {
+                    if (attr != null && attr.SystemIds != null)
+                    {
+                        foreach (var dependency in attr.SystemIds.Where(d => !string.IsNullOrEmpty(d)))
+                        {
+                            systemInfo.Dependencies.Add(dependency);
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"创建 {type.FullName} 的SystemInfo时出错: {e.Message}");
+                return null;
             }
 
             return systemInfo;
         }
 
+        private int GetPriorityWithoutInstantiation(Type type)
+        {
+            // 尝试通过反射字段获取优先级，避免实例化
+            var priorityField = type.GetField("_priority", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (priorityField != null && priorityField.FieldType == typeof(int))
+            {
+                return 0; // 返回默认值
+            }
+
+            // 检查其他可能的字段名
+            var possibleFieldNames = new[] { "priority", "m_priority", "initPriority", "_initPriority" };
+            foreach (var fieldName in possibleFieldNames)
+            {
+                var field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (field != null && field.FieldType == typeof(int))
+                {
+                    return 0; // 返回默认值
+                }
+            }
+
+            return 0;
+        }
+
         private void BuildDependencyGraph()
         {
             // 构建依赖图
-            foreach (var system in _systemInfos)
+            foreach (var system in _systemInfos.Where(s => s != null))
             {
+                if (system.Dependencies == null) continue;
+
                 foreach (var dependency in system.Dependencies)
                 {
-                    var dependentSystem = _systemInfos.FirstOrDefault(s => s.SystemId == dependency);
+                    if (string.IsNullOrEmpty(dependency)) continue;
+
+                    var dependentSystem = _systemInfos.FirstOrDefault(s => s != null && s.SystemId == dependency);
                     if (dependentSystem != null)
                     {
                         dependentSystem.Dependents.Add(system.SystemId);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"系统 {system.SystemId} 依赖的 {dependency} 不存在");
                     }
                 }
             }
         }
 
-        private void CalculatePriorities()
+        private void CalculateDependencyDepth()
         {
-            // 拓扑排序计算优先级
+            // 计算每个系统的依赖深度
+            foreach (var system in _systemInfos.Where(s => s != null))
+            {
+                system.DependencyDepth = CalculateDepth(system, new HashSet<string>());
+            }
+
+            // 根据依赖深度分配初始化顺序（深度越大，越先初始化）
+            int order = 1;
+            foreach (var system in _systemInfos.Where(s => s != null).OrderByDescending(s => s.DependencyDepth))
+            {
+                system.InitializationOrder = order++;
+            }
+        }
+
+        private int CalculateDepth(SystemInfo system, HashSet<string> visited)
+        {
+            if (system == null || string.IsNullOrEmpty(system.SystemId)) return 0;
+
+            if (visited.Contains(system.SystemId))
+            {
+                Debug.LogError($"发现循环依赖！系统: {system.SystemId}");
+                return 0;
+            }
+
+            visited.Add(system.SystemId);
+
+            int maxDepth = 0;
+            if (system.Dependencies != null)
+            {
+                foreach (var dependency in system.Dependencies)
+                {
+                    if (string.IsNullOrEmpty(dependency)) continue;
+
+                    var dependentSystem = _systemInfos.FirstOrDefault(s => s != null && s.SystemId == dependency);
+                    if (dependentSystem != null)
+                    {
+                        int depth = CalculateDepth(dependentSystem, new HashSet<string>(visited)) + 1;
+                        maxDepth = Math.Max(maxDepth, depth);
+                    }
+                }
+            }
+
+            visited.Remove(system.SystemId);
+            return maxDepth;
+        }
+
+        private void CalculateSuggestedPriorities()
+        {
+            // 基于依赖深度和拓扑排序计算建议的优先级
+            // 基本原则：依赖深度越大（依赖链越长），优先级应该越高（越先初始化）
+
+            // 获取拓扑排序结果
             var sortedSystems = TopologicalSort();
 
-            // 基于依赖深度分配优先级（深度越大，优先级越高）
+            // 分配建议优先级（从高到低）
             int basePriority = 1000;
-            foreach (var system in sortedSystems)
+            int priorityStep = 10; // 每个系统间隔10个优先级单位
+
+            foreach (var system in sortedSystems.Where(s => s != null))
             {
-                system.CalculatedPriority = basePriority;
-                basePriority -= 10; // 每个系统间隔10个优先级单位
+                system.SuggestedPriority = basePriority;
+                basePriority -= priorityStep;
+            }
+
+            // 确保优先级不会为负数
+            var minPriority = sortedSystems.Where(s => s != null).Min(s => s.SuggestedPriority);
+            if (minPriority < 0)
+            {
+                int offset = -minPriority;
+                foreach (var system in sortedSystems.Where(s => s != null))
+                {
+                    system.SuggestedPriority += offset;
+                }
             }
         }
 
@@ -235,19 +374,21 @@ namespace TechCosmos.InitializeSortSystem.Editor
             var visited = new HashSet<string>();
             var tempMark = new HashSet<string>();
 
-            foreach (var system in _systemInfos)
+            foreach (var system in _systemInfos.Where(s => s != null))
             {
                 if (!visited.Contains(system.SystemId))
                 {
-                    Visit(system, visited, tempMark, result);
+                    TopologicalVisit(system, visited, tempMark, result);
                 }
             }
 
             return result;
         }
 
-        private void Visit(SystemInfo system, HashSet<string> visited, HashSet<string> tempMark, List<SystemInfo> result)
+        private void TopologicalVisit(SystemInfo system, HashSet<string> visited, HashSet<string> tempMark, List<SystemInfo> result)
         {
+            if (system == null || string.IsNullOrEmpty(system.SystemId)) return;
+
             if (tempMark.Contains(system.SystemId))
             {
                 Debug.LogError($"发现循环依赖！系统: {system.SystemId}");
@@ -259,50 +400,24 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 tempMark.Add(system.SystemId);
 
                 // 先访问所有依赖
-                foreach (var dependency in system.Dependencies)
+                if (system.Dependencies != null)
                 {
-                    var dependentSystem = _systemInfos.FirstOrDefault(s => s.SystemId == dependency);
-                    if (dependentSystem != null)
+                    foreach (var dependency in system.Dependencies)
                     {
-                        Visit(dependentSystem, visited, tempMark, result);
+                        if (string.IsNullOrEmpty(dependency)) continue;
+
+                        var dependentSystem = _systemInfos.FirstOrDefault(s => s != null && s.SystemId == dependency);
+                        if (dependentSystem != null)
+                        {
+                            TopologicalVisit(dependentSystem, visited, tempMark, result);
+                        }
                     }
                 }
 
                 tempMark.Remove(system.SystemId);
                 visited.Add(system.SystemId);
-                result.Add(system);
+                result.Insert(0, system); // 插入到开头，这样依赖项会在后面
             }
-        }
-
-        private void ApplyCalculatedPriorities()
-        {
-            int updatedCount = 0;
-
-            foreach (var systemInfo in _systemInfos.Where(s => s.NeedsUpdate))
-            {
-                UpdateSystemPriority(systemInfo);
-                updatedCount++;
-            }
-
-            if (updatedCount > 0)
-            {
-                Debug.Log($"已更新 {updatedCount} 个系统的优先级");
-                AssetDatabase.Refresh();
-            }
-            else
-            {
-                Debug.Log("所有系统的优先级都是最新的");
-            }
-        }
-
-        private void UpdateSystemPriority(SystemInfo systemInfo)
-        {
-            // 这里需要根据你的具体实现来更新优先级
-            // 可能需要修改源代码文件或使用SerializedObject
-            Debug.Log($"更新系统 {systemInfo.SystemId} 的优先级: {systemInfo.CurrentPriority} -> {systemInfo.CalculatedPriority}");
-
-            // 标记为已更新
-            systemInfo.CurrentPriority = systemInfo.CalculatedPriority;
         }
     }
 
@@ -312,11 +427,11 @@ namespace TechCosmos.InitializeSortSystem.Editor
         public Type Type;
         public string SystemId;
         public int CurrentPriority;
-        public int CalculatedPriority;
+        public int SuggestedPriority; // 建议的优先级值
+        public int DependencyDepth;   // 依赖深度（0表示没有依赖）
+        public int InitializationOrder; // 初始化顺序（1表示最先初始化）
         public HashSet<string> Dependencies;
         public HashSet<string> Dependents;
-
-        public bool NeedsUpdate => CurrentPriority != CalculatedPriority;
     }
 }
 #endif
