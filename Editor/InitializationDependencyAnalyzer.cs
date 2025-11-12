@@ -55,7 +55,11 @@ namespace TechCosmos.InitializeSortSystem.Editor
                 {
                     foreach (var systemInfo in _systemInfos.OrderBy(s => s.CalculatedPriority))
                     {
-                        DrawSystemInfo(systemInfo);
+                        if (systemInfo != null)
+                        {
+                            DrawSystemInfo(systemInfo);
+                        }
+                        
                     }
                 }
                 EditorGUILayout.EndScrollView();
