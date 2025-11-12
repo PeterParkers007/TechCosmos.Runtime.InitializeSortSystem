@@ -1,4 +1,4 @@
-# 初始化依赖分析器 (Initialization Dependency Analyzer)
+# Initialization Dependency Analyzer
 
 一个用于 Unity 的智能初始化系统依赖分析工具，能够自动扫描项目中的初始化系统，分析依赖关系，并提供优化的初始化顺序建议。
 
